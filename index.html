@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image to WebP Converter</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- JSZip for zipping files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #ccc; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #aaa; 
+        }
+
+        .drop-active {
+            border-color: #3b82f6 !important;
+            background-color: #eff6ff !important;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .loader {
+            border: 3px solid #e5e7eb;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        
+        .range-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #2563eb;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 h-screen flex flex-col overflow-hidden font-sans">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200 p-4 z-10 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div class="flex items-center space-x-2">
+            <div class="bg-blue-600 text-white p-2 rounded-lg shadow-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+            </div>
+            <h1 class="text-xl font-bold text-gray-800">WebP Tool</h1>
+        </div>
+        
+        <div class="flex flex-wrap items-center gap-4">
+            <!-- Scale Input -->
+            <div class="flex items-center space-x-3 bg-gray-100 px-4 py-2 rounded-lg border border-gray-200">
+                <label for="scale" class="text-sm font-semibold text-gray-600">Scale</label>
+                <input type="range" id="scale" min="0.01" max="1.50" step="0.01" value="1.00" class="range-slider w-32 h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
+                <span id="scaleValue" class="font-mono font-bold text-blue-600 text-sm w-12 text-right">100%</span>
+            </div>
+
+             <!-- Quality Input -->
+             <div class="flex items-center space-x-3 bg-gray-100 px-4 py-2 rounded-lg border border-gray-200">
+                <label for="quality" class="text-sm font-semibold text-gray-600">Quality</label>
+                <input type="range" id="quality" min="0.1" max="1.0" step="0.1" value="0.8" class="range-slider w-24 h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
+                <span id="qualityValue" class="font-mono font-bold text-blue-600 text-sm w-8 text-right">0.8</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col p-4 sm:p-6 max-w-5xl mx-auto w-full h-full overflow-hidden">
+        
+        <!-- Drop Zone -->
+        <div id="dropZone" class="flex-shrink-0 border-2 border-dashed border-gray-300 rounded-2xl bg-white p-8 text-center transition-all duration-200 ease-in-out cursor-pointer hover:border-blue-400 hover:bg-blue-50 group mb-6 relative">
+            <input type="file" id="fileInput" multiple accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+            <div class="pointer-events-none">
+                <div class="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                </div>
+                <p class="text-lg font-semibold text-gray-700">Drop images or folders here</p>
+                <p class="text-sm text-gray-500 mt-1">Supports PNG, JPG, BMP</p>
+            </div>
+        </div>
+
+        <!-- Actions Bar -->
+        <div id="actionBar" class="hidden flex-shrink-0 flex justify-between items-center mb-4 bg-white p-3 px-4 rounded-xl shadow-sm border border-gray-200">
+            <div class="flex items-center space-x-4">
+                <div class="flex flex-col">
+                    <span class="text-gray-700 font-bold text-sm">Processed Files</span>
+                    <span class="text-gray-500 text-xs"><span id="fileCount">0</span> items ready</span>
+                </div>
+                <div class="h-8 w-px bg-gray-200"></div>
+                <button id="clearBtn" class="text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-md text-sm font-medium transition-colors">Clear All</button>
+            </div>
+            <button id="downloadBtn" disabled class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center space-x-2 font-medium">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                <span id="btnText">Download ZIP</span>
+            </button>
+        </div>
+
+        <!-- File List -->
+        <div class="flex-1 overflow-y-auto bg-white rounded-xl shadow-sm border border-gray-200 hidden" id="resultsArea">
+            <div class="sticky top-0 bg-gray-50 border-b border-gray-200 px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider flex">
+                <div class="w-12 shrink-0"></div>
+                <div class="flex-1 px-2">File Name</div>
+                <div class="w-32 px-2 text-right">Resolution</div>
+                <div class="w-32 px-2 text-right">Size</div>
+            </div>
+            <div id="filesList" class="divide-y divide-gray-100">
+                <!-- Items will be injected here -->
+            </div>
+        </div>
+
+        <!-- Empty State Hint -->
+        <div id="emptyHint" class="flex-1 flex flex-col items-center justify-center text-gray-300">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <span class="text-sm font-medium">No files converted yet</span>
+        </div>
+
+    </main>
+
+    <script>
+        // --- Elements ---
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        
+        const qualityInput = document.getElementById('quality');
+        const qualityValue = document.getElementById('qualityValue');
+        
+        const scaleInput = document.getElementById('scale');
+        const scaleValue = document.getElementById('scaleValue');
+
+        const filesList = document.getElementById('filesList');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const btnText = document.getElementById('btnText');
+        const fileCountSpan = document.getElementById('fileCount');
+        const clearBtn = document.getElementById('clearBtn');
+        const actionBar = document.getElementById('actionBar');
+        const resultsArea = document.getElementById('resultsArea');
+        const emptyHint = document.getElementById('emptyHint');
+
+        // --- State ---
+        let fileQueue = []; // Stores { id, file, path, img, rowEl, blob, isProcessing }
+        let debounceTimer = null;
+        let processingCount = 0;
+
+        // --- Event Listeners ---
+        
+        // Quality Slider
+        qualityInput.addEventListener('input', (e) => {
+            qualityValue.textContent = e.target.value;
+            debouncedReprocess();
+        });
+
+        // Scale Slider
+        scaleInput.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            scaleValue.textContent = Math.round(val * 100) + '%';
+            
+            // Immediate Visual Feedback for Dimensions
+            fileQueue.forEach(item => {
+                if(item.img) {
+                    const dimsEl = item.rowEl.querySelector('.dims-text');
+                    const w = Math.round(item.img.width * val);
+                    const h = Math.round(item.img.height * val);
+                    dimsEl.innerHTML = `<span class="text-gray-400">${item.img.width}x${item.img.height}</span> &rarr; <span class="text-blue-600 font-bold">${w}x${h}</span>`;
+                    
+                    // Indicate stale size
+                    const sizeEl = item.rowEl.querySelector('.size-text');
+                    if(!sizeEl.classList.contains('italic')) {
+                       sizeEl.classList.add('italic', 'text-gray-400');
+                       sizeEl.textContent = 'Recalculating...';
+                    }
+                }
+            });
+
+            debouncedReprocess();
+        });
+
+        function debouncedReprocess() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                reprocessAll();
+            }, 500); // Wait 500ms after last input to start heavy processing
+        }
+
+        async function reprocessAll() {
+            // Mark all as processing UI
+            if (fileQueue.length === 0) return;
+            
+            // We process sequentially to avoid hanging the UI completely
+            for (const item of fileQueue) {
+                if (item.img) {
+                    await processItem(item);
+                }
+            }
+        }
+
+        // Drag & Drop
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drop-active');
+        });
+
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drop-active');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drop-active');
+            handleItems(e.dataTransfer.items);
+        });
+
+        // Click to Upload
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+            fileInput.value = ''; 
+        });
+
+        // Clear
+        clearBtn.addEventListener('click', () => {
+            fileQueue.forEach(item => URL.revokeObjectURL(item.url));
+            fileQueue = [];
+            filesList.innerHTML = '';
+            updateUI();
+        });
+
+        // Download
+        downloadBtn.addEventListener('click', async () => {
+            const validFiles = fileQueue.filter(i => i.blob);
+            if (validFiles.length === 0) return;
+
+            downloadBtn.disabled = true;
+            btnText.textContent = "Zipping...";
+
+            const zip = new JSZip();
+            const imgFolder = zip.folder("webp_images");
+
+            validFiles.forEach(item => {
+                // Ensure unique names if paths are flat
+                // Using path is better
+                let safeName = item.path.replace(/\.[^/.]+$/, "") + ".webp";
+                // safeName handles folder structure if 'path' contains slashes
+                imgFolder.file(safeName, item.blob);
+            });
+
+            try {
+                const content = await zip.generateAsync({ type: "blob" });
+                const url = URL.createObjectURL(content);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "converted_images.zip";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (err) {
+                alert("Error creating zip file: " + err.message);
+            } finally {
+                downloadBtn.disabled = false;
+                btnText.textContent = "Download ZIP";
+            }
+        });
+
+        // --- Logic ---
+
+        function updateUI() {
+            fileCountSpan.textContent = fileQueue.length;
+            const hasItems = fileQueue.length > 0;
+            const isBusy = processingCount > 0;
+
+            if (hasItems) {
+                actionBar.classList.remove('hidden');
+                actionBar.classList.add('flex');
+                resultsArea.classList.remove('hidden');
+                emptyHint.classList.add('hidden');
+            } else {
+                actionBar.classList.add('hidden');
+                actionBar.classList.remove('flex');
+                resultsArea.classList.add('hidden');
+                emptyHint.classList.remove('hidden');
+            }
+
+            // Disable download if processing
+            if (hasItems && !isBusy) {
+                downloadBtn.disabled = false;
+                downloadBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                btnText.textContent = "Download ZIP";
+            } else {
+                downloadBtn.disabled = true;
+                if(isBusy) btnText.textContent = "Processing...";
+            }
+        }
+
+        async function handleItems(items) {
+            const entriesToScan = [];
+            for (let i = 0; i < items.length; i++) {
+                const entry = items[i].webkitGetAsEntry();
+                if (entry) entriesToScan.push(entry);
+            }
+            
+            const entries = [];
+            for (const entry of entriesToScan) {
+                await scanEntry(entry, entries);
+            }
+            
+            // Add to queue
+            for (const entry of entries) {
+                addItemToQueue(entry.file, entry.path);
+            }
+        }
+
+        async function handleFiles(files) {
+            const entries = Array.from(files).map(f => ({ file: f, path: f.name }));
+            for (const entry of entries) {
+                addItemToQueue(entry.file, entry.path);
+            }
+        }
+
+        async function scanEntry(entry, entriesArr, path = "") {
+            if (entry.isFile) {
+                return new Promise((resolve) => {
+                    entry.file((file) => {
+                        if (file.type.startsWith('image/') || /\.(jpe?g|png|bmp)$/i.test(file.name)) {
+                            entriesArr.push({ file, path: path + file.name });
+                        }
+                        resolve();
+                    });
+                });
+            } else if (entry.isDirectory) {
+                const reader = entry.createReader();
+                const readEntries = async () => {
+                    const results = await new Promise((resolve) => {
+                        reader.readEntries(entries => resolve(entries));
+                    });
+                    if (results.length > 0) {
+                        await Promise.all(results.map(child => scanEntry(child, entriesArr, path + entry.name + "/")));
+                        await readEntries();
+                    }
+                };
+                await readEntries();
+            }
+        }
+
+        function addItemToQueue(file, path) {
+            // Create UI Placeholder
+            const rowEl = document.createElement('div');
+            rowEl.className = "flex items-center p-3 hover:bg-gray-50 transition-colors group";
+            
+            // Basic inner HTML structure
+            rowEl.innerHTML = `
+                <div class="w-12 shrink-0 flex justify-center">
+                    <div class="w-10 h-10 bg-gray-100 rounded-md flex items-center justify-center overflow-hidden shadow-sm border border-gray-200 thumb-box">
+                        <div class="loader"></div>
+                    </div>
+                </div>
+                <div class="flex-1 px-3 min-w-0">
+                    <div class="text-sm font-medium text-gray-700 truncate" title="${path}">${path}</div>
+                    <div class="text-xs text-red-400 hidden error-msg"></div>
+                </div>
+                <div class="w-32 px-2 text-right text-xs font-mono dims-text text-gray-400">-</div>
+                <div class="w-32 px-2 text-right text-xs font-mono size-text text-gray-400">Pending...</div>
+            `;
+
+            // Insert at top
+            filesList.insertBefore(rowEl, filesList.firstChild);
+
+            const item = {
+                id: Date.now() + Math.random(),
+                file: file,
+                path: path,
+                rowEl: rowEl,
+                img: null,
+                blob: null,
+                url: URL.createObjectURL(file)
+            };
+
+            fileQueue.push(item);
+            
+            // Load Image
+            const img = new Image();
+            img.onload = () => {
+                item.img = img;
+                updateUI(); // Update counts
+                processItem(item); // Trigger conversion
+            };
+            img.onerror = () => {
+                item.rowEl.querySelector('.loader').remove();
+                item.rowEl.querySelector('.thumb-box').innerText = "⚠️";
+                item.rowEl.querySelector('.error-msg').textContent = "Invalid Image";
+                item.rowEl.querySelector('.error-msg').classList.remove('hidden');
+                URL.revokeObjectURL(item.url);
+                // Remove from queue logical or keep as error? Keep as error.
+                updateUI();
+            };
+            img.src = item.url;
+        }
+
+        function processItem(item) {
+            return new Promise((resolve) => {
+                if (!item.img) { resolve(); return; }
+                
+                processingCount++;
+                updateUI();
+
+                const row = item.rowEl;
+                const thumbBox = row.querySelector('.thumb-box');
+                const dimsText = row.querySelector('.dims-text');
+                const sizeText = row.querySelector('.size-text');
+
+                // Show loading state if not initial
+                if (!thumbBox.querySelector('.loader') && !thumbBox.querySelector('img')) {
+                     thumbBox.innerHTML = '<div class="loader"></div>';
+                }
+
+                // Use requestAnimationFrame to allow UI to update before heavy canvas work
+                requestAnimationFrame(() => {
+                    const s = parseFloat(scaleInput.value);
+                    const q = parseFloat(qualityInput.value);
+
+                    const canvas = document.createElement('canvas');
+                    const targetW = Math.round(item.img.width * s);
+                    const targetH = Math.round(item.img.height * s);
+
+                    canvas.width = targetW;
+                    canvas.height = targetH;
+                    const ctx = canvas.getContext('2d');
+                    
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
+                    ctx.drawImage(item.img, 0, 0, targetW, targetH);
+
+                    canvas.toBlob((blob) => {
+                        if (blob) {
+                            item.blob = blob;
+                            
+                            // Update Thumbnail
+                            thumbBox.innerHTML = '';
+                            const thumb = document.createElement('img');
+                            thumb.src = URL.createObjectURL(blob);
+                            thumb.className = "w-full h-full object-cover";
+                            thumbBox.appendChild(thumb);
+
+                            // Update Dims Text
+                            dimsText.innerHTML = `<span class="text-gray-400">${item.img.width}x${item.img.height}</span> &rarr; <span class="text-blue-600 font-bold">${targetW}x${targetH}</span>`;
+
+                            // Update Size Text
+                            const savedPct = Math.round((1 - (blob.size / item.file.size)) * 100);
+                            const colorClass = savedPct > 0 ? 'text-green-600 font-bold' : 'text-orange-500';
+                            const sign = savedPct > 0 ? '-' : '+';
+                            
+                            sizeText.className = "w-32 px-2 text-right text-xs font-mono size-text " + colorClass;
+                            sizeText.textContent = `${formatBytes(blob.size)} (${sign}${Math.abs(savedPct)}%)`;
+
+                        } else {
+                            sizeText.textContent = "Error";
+                        }
+
+                        processingCount--;
+                        updateUI();
+                        resolve();
+                    }, 'image/webp', q);
+                });
+            });
+        }
+
+        function formatBytes(bytes, decimals = 2) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
+    </script>
+</body>
+</html>
